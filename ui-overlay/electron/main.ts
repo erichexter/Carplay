@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, screen } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as toml from "smol-toml";
@@ -32,7 +32,46 @@ let mainWindow: BrowserWindow | null = null;
 // overlay that stacks over CarPlay.
 const DEV_MODE = process.env.TRUCKDASH_OVERLAY_DEV === "1";
 
+// Width of the gauge strip in production. Wide enough for a 3-digit large
+// gauge value (RPM peaks around 3300, speed sub-100). Bumping the gauge
+// font sizes? Bump this too.
+const PANEL_W = 360;
+
 function createWindow(): void {
+  let prodOpts: Electron.BrowserWindowConstructorOptions | null = null;
+
+  if (!DEV_MODE) {
+    // Size the overlay to a vertical strip on the right edge instead of
+    // fullscreen. setIgnoreMouseEvents is unreliable on labwc/Wayland —
+    // labwc doesn't honor wl_surface.set_input_region for non-layer-shell
+    // surfaces, so a fullscreen overlay swallows every click meant for
+    // CarPlay underneath. A right-strip window means only the gauge area
+    // is dead to clicks, and the rest of the screen passes through
+    // naturally. Phase 5's compositor work replaces this with a real
+    // wlr-layer-shell surface; until then this is the workaround.
+    // TODO: respect cfg.overlay.position to pick the corner; right now we
+    // assume top-right which is what config/gauges.toml ships with.
+    const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize;
+    prodOpts = {
+      x: scrW - PANEL_W,
+      y: 0,
+      width: PANEL_W,
+      height: scrH,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      hasShadow: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      focusable: false,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    };
+  }
+
   mainWindow = new BrowserWindow(
     DEV_MODE
       ? {
@@ -46,29 +85,15 @@ function createWindow(): void {
             nodeIntegration: false,
           },
         }
-      : {
-          fullscreen: true,
-          frame: false,
-          transparent: true,
-          backgroundColor: "#00000000",
-          hasShadow: false,
-          alwaysOnTop: true,
-          skipTaskbar: true,
-          focusable: false,
-          webPreferences: {
-            preload: path.join(__dirname, "preload.js"),
-            contextIsolation: true,
-            nodeIntegration: false,
-          },
-        },
+      : prodOpts!,
   );
 
   if (!DEV_MODE) {
-    // Pass all pointer events through to whatever's below. The gauges are
-    // read-only in Phase 2 so this is the right default. When tappable
-    // elements are added later, flip to setIgnoreMouseEvents(false) via IPC
-    // on pointerenter / back to (true, {forward:true}) on pointerleave.
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    // Defense in depth — if the strip ever covers a clickable region, the
+    // gauges are read-only so we still want clicks to fall through. Drops
+    // through on X11; on labwc/Wayland support is patchy but this is a
+    // no-op when unsupported.
+    mainWindow.setIgnoreMouseEvents(true);
   }
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
