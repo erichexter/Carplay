@@ -98,15 +98,22 @@ ELECTRON_FLAGS=(
     --ozone-platform=wayland
     --ignore-gpu-blocklist
     --enable-gpu-rasterization
+    # WaylandOverlayDelegation tells Chromium to promote subsurfaces to
+    # hardware overlays via wp_viewporter — which forces gbm to allocate
+    # buffers with usage=SCANOUT. labwc + V3D can only scan out from the
+    # primary fullscreen surface, so for windowed (kiosk:false) CarPlay
+    # this fails in a 1Hz gpu_process exit_code=8704 crash loop:
+    #   "Cannot create bo with format=RGBA_8888 and usage=SCANOUT"
+    # Disabling overlay delegation keeps Chromium compositing into a
+    # single RGBA surface that the compositor can sample normally.
+    --disable-features=WaylandOverlayDelegation
     # Pi 4B-only workarounds we removed on Pi 5:
     #   --disable-features=Vulkan / --use-gl=angle / --use-angle=gles
     #     Pi 4's V3D 4.2 had broken v3dv; Pi 5's V3D 7.1 has working
     #     Vulkan, so let WebGPU init natively.
     #   --enable-zero-copy
-    #     Demands SCANOUT-eligible buffers — fine for fullscreen kiosk
-    #     surfaces, breaks windowed (kiosk:false) compositing on labwc.
-    # If we ever boot a Pi 4B again, restore the first three flags. The
-    # zero-copy stays off so kiosk-toggling works on either Pi.
+    #     Demands SCANOUT-eligible buffers — same root cause as overlay
+    #     delegation above. Off on Pi 5 too.
 )
 
 # For the dev-mode electron binary, point it at the app directory. For a
