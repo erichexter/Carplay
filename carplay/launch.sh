@@ -81,16 +81,33 @@ log "exec: $BIN"
 # hint (ELECTRON_OZONE_PLATFORM_HINT) is advisory — the flag is binding.
 # Without it Electron aborts with "Missing X server or $DISPLAY".
 #
-# GPU rasterization + zero-copy + ignore-blocklist help on any Pi: V3D
-# is blocklisted by default and software raster eats CPU. Keep these on
-# both Pi 4B and Pi 5.
+# Pi 4B GPU tuning:
+#   --disable-features=Vulkan
+#       Pi 4's V3D 4.2 has only partial Vulkan via v3dv. Dawn init
+#       spams "fullDrawIndexUint32 required" and churns.
+#   --enable-gpu-rasterization --ignore-gpu-blocklist
+#       Chromium blocklists the V3D driver by default — force raster
+#       onto the GPU anyway.
+#   --enable-zero-copy
+#       Avoid a round-trip through system memory for textures.
 #
-# Pi 5 (V3D 7.1) has working Vulkan, so we let WebGPU initialize natively.
-# On the Pi 4B (V3D 4.2 / v3dv) this loop-spammed Dawn with
-# "fullDrawIndexUint32 required" — if we ever boot a Pi 4B again, add
-# `--disable-features=Vulkan --use-gl=angle --use-angle=gles` back.
+# The gbm SCANOUT errors in the journal are cosmetic — Chromium retries
+# without SCANOUT and ends up composited in software. Accepting that on
+# Pi 4B; Pi 5 upgrade path will fix the dma_buf scanout story.
 ELECTRON_FLAGS=(
     --ozone-platform=wayland
+    # Vulkan: Pi 4B V3D 4.2 has only partial Vulkan via v3dv; Dawn init
+    #   loops with "fullDrawIndexUint32 required". WebGPU falls back to
+    #   WebGL2 in the render worker.
+    # ANGLE → GLES routes Chromium through ANGLE's GLES backend on top
+    # of Mesa's V3D EGL, which uses a different buffer allocator than
+    # the default path that crashlooped the GPU with gbm SCANOUT errors.
+    # Keeps GPU compositing active; without it the renderer had to
+    # software-composite the 20 fps CarPlay video canvas and hit 250%+
+    # CPU, starving the main thread (30 s click latency).
+    --disable-features=Vulkan
+    --use-gl=angle
+    --use-angle=gles
     --ignore-gpu-blocklist
     --enable-gpu-rasterization
     --enable-zero-copy
