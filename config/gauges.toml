@@ -32,6 +32,8 @@ render_hz = 10
 pid = "speed"
 type = "numeric"
 size = "large"
+range_min = 0
+range_max = 100
 warn_above = 70     # mph
 alert_above = 75
 
@@ -39,33 +41,43 @@ alert_above = 75
 pid = "rpm"
 type = "numeric"
 size = "medium"
-warn_above = 3000   # 7.3L redlines near 3300
+range_min = 0
+range_max = 3500    # 7.3L redlines near 3300, give the bar headroom
+warn_above = 3000
 alert_above = 3200
 
 [[gauges]]
 pid = "eot"
 type = "numeric"
 size = "medium"
-warn_above = 220    # °F
+range_min = 100
+range_max = 250     # °F
+warn_above = 220
 alert_above = 228
 
 [[gauges]]
 pid = "tot"
 type = "numeric"
 size = "medium"
-warn_above = 190    # °F — 4R100 is happy below here
+range_min = 100
+range_max = 220     # °F — 4R100 is happy below 190
+warn_above = 190
 alert_above = 200
 
 [[gauges]]
 pid = "icp"
 type = "numeric"
 size = "medium"
-warn_below = 500    # psi — idle ICP ~500-600; losing pressure = stall risk
+range_min = 0
+range_max = 3500    # psi — idle ~500-600, peaks much higher under load
+warn_below = 500
 alert_below = 400
 
 [[gauges]]
 pid = "fuel_level"
 type = "numeric"
 size = "small"
-warn_below = 25     # %
+range_min = 0
+range_max = 100     # %
+warn_below = 25
 alert_below = 10

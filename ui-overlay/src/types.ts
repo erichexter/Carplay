@@ -6,6 +6,11 @@ export interface GaugeConfig {
   alert_above?: number;
   warn_below?: number;
   alert_below?: number;
+  // When both range_min and range_max are set, the gauge renders a
+  // colored band (green/yellow/red) with a marker showing the current
+  // value. Without a range the gauge is digits-only.
+  range_min?: number;
+  range_max?: number;
 }
 
 export interface OverlayConfig {
