@@ -100,8 +100,7 @@ export function Gauge({ config, sample }: Props) {
   return (
     <div
       style={{
-        padding: "8px 14px",
-        margin: "4px 0",
+        padding: "4px 14px",
         color: LEVEL_COLOR[level],
         fontVariantNumeric: "tabular-nums",
         textAlign: "right",
@@ -109,7 +108,8 @@ export function Gauge({ config, sample }: Props) {
     >
       <div
         style={{
-          fontSize: 30,
+          fontSize: 26,
+          lineHeight: 1,
           color: "#f5b50d",
           fontWeight: 700,
           textTransform: "uppercase",
@@ -121,13 +121,15 @@ export function Gauge({ config, sample }: Props) {
       <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1 }}>
         {value != null ? value.toFixed(0) : "--"}
       </div>
-      <div style={{ fontSize: 24, color: "#aaa" }}>{sample?.unit ?? ""}</div>
+      <div style={{ fontSize: 20, lineHeight: 1, color: "#aaa" }}>
+        {sample?.unit ?? ""}
+      </div>
       {gradient && (
         <div
           style={{
             position: "relative",
-            marginTop: 6,
-            height: 12,
+            marginTop: 4,
+            height: 10,
             borderRadius: 2,
             background: gradient,
             opacity: 0.85,
