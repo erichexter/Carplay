@@ -94,6 +94,20 @@ function createWindow(): void {
     // through on X11; on labwc/Wayland support is patchy but this is a
     // no-op when unsupported.
     mainWindow.setIgnoreMouseEvents(true);
+
+    // 'screen-saver' is Electron's stickiest alwaysOnTop level. Without
+    // this, labwc raises whichever window the user just focused (CarPlay)
+    // above us — clicking the CarPlay UI hides the overlay. Combined with
+    // the moveTop() poll below, this keeps the gauges visible.
+    mainWindow.setAlwaysOnTop(true, "screen-saver");
+
+    // Backstop: even at level=screen-saver, labwc occasionally restacks on
+    // focus events. A 1Hz moveTop() costs nothing and pulls us back to the
+    // top within a second of any z-order disturbance. Phase 5's
+    // wlr-layer-shell migration deletes this whole dance.
+    setInterval(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+    }, 1000);
   }
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
