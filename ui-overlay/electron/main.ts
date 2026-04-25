@@ -35,7 +35,13 @@ const DEV_MODE = process.env.TRUCKDASH_OVERLAY_DEV === "1";
 // Width of the gauge strip in production. Wide enough for a 3-digit large
 // gauge value (RPM peaks around 3300, speed sub-100). Bumping the gauge
 // font sizes? Bump this too.
-const PANEL_W = 360;
+// Overlay strip width. Was 360 when the overlay floated transparent over
+// a fullscreen CarPlay window — labwc click-through being broken meant
+// a wide opaque strip would swallow CarPlay clicks. Now that CarPlay is
+// rendered as a non-fullscreen window beside us (windowRule in
+// ~/.config/labwc/rc.xml), we own the entire right strip and can be
+// opaque + wide. Width matches `ResizeTo` in the labwc rule.
+const PANEL_W = 640;
 
 function createWindow(): void {
   let prodOpts: Electron.BrowserWindowConstructorOptions | null = null;
@@ -60,8 +66,8 @@ function createWindow(): void {
       title: "TruckDash overlay",
       show: false,
       frame: false,
-      transparent: true,
-      backgroundColor: "#00000000",
+      transparent: false,
+      backgroundColor: "#000000",
       hasShadow: false,
       alwaysOnTop: true,
       skipTaskbar: true,
