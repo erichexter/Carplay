@@ -35,13 +35,15 @@ const DEV_MODE = process.env.TRUCKDASH_OVERLAY_DEV === "1";
 // Width of the gauge strip in production. Wide enough for a 3-digit large
 // gauge value (RPM peaks around 3300, speed sub-100). Bumping the gauge
 // font sizes? Bump this too.
-// Overlay strip width. Was 360 when the overlay floated transparent over
-// a fullscreen CarPlay window — labwc click-through being broken meant
-// a wide opaque strip would swallow CarPlay clicks. Now that CarPlay is
-// rendered as a non-fullscreen window beside us (windowRule in
-// ~/.config/labwc/rc.xml), we own the entire right strip and can be
-// opaque + wide. Width matches `ResizeTo` in the labwc rule.
-const PANEL_W = 640;
+// Overlay strip is 25% of screen width, clamped to [320, 800] and rounded
+// to a 16px boundary so the gauge layout never lands on awkward fractions.
+// Same formula as scripts/configure-display.sh — if you change one, change
+// the other or the labwc rule and Electron's initial setBounds will
+// disagree on first map.
+function panelWidthFor(screenW: number): number {
+  const raw = Math.max(320, Math.min(800, Math.floor(screenW / 4)));
+  return Math.floor(raw / 16) * 16;
+}
 
 function createWindow(): void {
   let prodOpts: Electron.BrowserWindowConstructorOptions | null = null;
@@ -58,10 +60,11 @@ function createWindow(): void {
     // TODO: respect cfg.overlay.position to pick the corner; right now we
     // assume top-right which is what config/gauges.toml ships with.
     const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize;
+    const panelW = panelWidthFor(scrW);
     prodOpts = {
-      x: scrW - PANEL_W,
+      x: scrW - panelW,
       y: 0,
-      width: PANEL_W,
+      width: panelW,
       height: scrH,
       title: "TruckDash overlay",
       show: false,
@@ -117,9 +120,10 @@ function createWindow(): void {
     // If this still doesn't anchor reliably, the durable fix is a
     // labwc windowRule keyed on title="TruckDash overlay".
     const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize;
+    const panelW = panelWidthFor(scrW);
     mainWindow.once("ready-to-show", () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.setBounds({ x: scrW - PANEL_W, y: 0, width: PANEL_W, height: scrH });
+      mainWindow.setBounds({ x: scrW - panelW, y: 0, width: panelW, height: scrH });
       mainWindow.show();
     });
 
