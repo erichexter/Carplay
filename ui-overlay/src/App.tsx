@@ -4,11 +4,16 @@ import { Gauge } from "./Gauge";
 import { SampleStream } from "./ws";
 import type { GaugesConfig, Sample } from "./types";
 
+// All four corners stretch horizontally (left:0, right:0) so the gauge
+// row — bar + title — can span the full strip width. The window itself
+// is already a vertical strip on the right edge of the panel, so the
+// "corner" config now only meaningfully picks top vs bottom; left/right
+// alignment of text is handled inside <Gauge>.
 const CORNER_STYLE: Record<string, CSSProperties> = {
-  "top-left": { top: 0, left: 0 },
-  "top-right": { top: 0, right: 0 },
-  "bottom-left": { bottom: 0, left: 0 },
-  "bottom-right": { bottom: 0, right: 0 },
+  "top-left": { top: 0, left: 0, right: 0 },
+  "top-right": { top: 0, left: 0, right: 0 },
+  "bottom-left": { bottom: 0, left: 0, right: 0 },
+  "bottom-right": { bottom: 0, left: 0, right: 0 },
 };
 
 export function App() {
