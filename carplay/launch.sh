@@ -96,27 +96,17 @@ log "exec: $BIN"
 # Pi 4B; Pi 5 upgrade path will fix the dma_buf scanout story.
 ELECTRON_FLAGS=(
     --ozone-platform=wayland
-    # Vulkan: Pi 4B V3D 4.2 has only partial Vulkan via v3dv; Dawn init
-    #   loops with "fullDrawIndexUint32 required". WebGPU falls back to
-    #   WebGL2 in the render worker.
-    # ANGLE → GLES routes Chromium through ANGLE's GLES backend on top
-    # of Mesa's V3D EGL, which uses a different buffer allocator than
-    # the default path that crashlooped the GPU with gbm SCANOUT errors.
-    # Keeps GPU compositing active; without it the renderer had to
-    # software-composite the 20 fps CarPlay video canvas and hit 250%+
-    # CPU, starving the main thread (30 s click latency).
-    --disable-features=Vulkan
-    --use-gl=angle
-    --use-angle=gles
     --ignore-gpu-blocklist
     --enable-gpu-rasterization
-    # NOTE: --enable-zero-copy is OK for fullscreen surfaces (kiosk:true)
-    # because they can hit the display controller's scanout path with
-    # SCANOUT-eligible buffers. With kiosk:false the surface is windowed
-    # and the compositor has to composite — zero-copy buffers can't be
-    # scanned out OR sampled, so the GPU process exits in a 1Hz crash
-    # loop. Leaving zero-copy off; the small cost on fullscreen mode is
-    # worth keeping kiosk-toggling viable.
+    # Pi 4B-only workarounds we removed on Pi 5:
+    #   --disable-features=Vulkan / --use-gl=angle / --use-angle=gles
+    #     Pi 4's V3D 4.2 had broken v3dv; Pi 5's V3D 7.1 has working
+    #     Vulkan, so let WebGPU init natively.
+    #   --enable-zero-copy
+    #     Demands SCANOUT-eligible buffers — fine for fullscreen kiosk
+    #     surfaces, breaks windowed (kiosk:false) compositing on labwc.
+    # If we ever boot a Pi 4B again, restore the first three flags. The
+    # zero-copy stays off so kiosk-toggling works on either Pi.
 )
 
 # For the dev-mode electron binary, point it at the app directory. For a
