@@ -1,9 +1,15 @@
 import type { GaugeConfig, Sample } from "./types";
 
+// Sized for a 640px-wide right-edge strip on a 2560-wide panel. Vertical
+// budget for the default 6 gauges (1 large, 4 medium, 1 small): roughly
+// 310 + 4*230 + 190 = 1420px in a 1600px column, leaving ~180px slack.
+// If you add a 7th gauge or bump values further, drop a `medium` to
+// `small` in config/gauges.toml first — packing past 1500px starts to
+// look cramped.
 const SIZE_PX: Record<GaugeConfig["size"], number> = {
-  small: 80,
-  medium: 112,
-  large: 160,
+  small: 120,
+  medium: 160,
+  large: 240,
 };
 
 interface Props {
@@ -36,8 +42,8 @@ export function Gauge({ config, sample }: Props) {
   return (
     <div
       style={{
-        padding: "6px 10px",
-        margin: "2px 0",
+        padding: "8px 14px",
+        margin: "4px 0",
         color: LEVEL_COLOR[level],
         fontVariantNumeric: "tabular-nums",
         textAlign: "right",
@@ -45,11 +51,11 @@ export function Gauge({ config, sample }: Props) {
     >
       <div
         style={{
-          fontSize: 22,
+          fontSize: 30,
           color: "#f5b50d",
           fontWeight: 700,
           textTransform: "uppercase",
-          letterSpacing: 1,
+          letterSpacing: 1.5,
         }}
       >
         {sample?.display ?? config.pid}
@@ -57,7 +63,7 @@ export function Gauge({ config, sample }: Props) {
       <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1 }}>
         {value != null ? value.toFixed(0) : "--"}
       </div>
-      <div style={{ fontSize: 18, color: "#aaa" }}>{sample?.unit ?? ""}</div>
+      <div style={{ fontSize: 24, color: "#aaa" }}>{sample?.unit ?? ""}</div>
     </div>
   );
 }
