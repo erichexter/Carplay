@@ -56,6 +56,26 @@ if [[ -d "$PREFIX/obd2" ]]; then
     sudo -u truckdash "$PREFIX/obd2/.venv/bin/pip" install --quiet -e "$PREFIX/obd2"
 fi
 
+# ---------- labwc + react-carplay user configs ----------
+# Both files belong to the truckdash user's home (where labwc and the
+# CarPlay Electron app actually look for them). We deploy them only if
+# absent so per-Pi tweaks (e.g., the user toggling kiosk mode) survive
+# a reinstall — re-deploy by deleting the file first.
+log "installing labwc + react-carplay user config defaults (only if missing)"
+LABWC_DIR=/home/truckdash/.config/labwc
+RC_USER=/home/truckdash/.config/react-carplay
+install -d -o truckdash -g truckdash -m 0755 "$LABWC_DIR" "$RC_USER"
+if [[ ! -f "$LABWC_DIR/rc.xml" ]]; then
+    install -o truckdash -g truckdash -m 0644 \
+        "$REPO_ROOT/config/labwc-rc.xml" "$LABWC_DIR/rc.xml"
+    log "  installed $LABWC_DIR/rc.xml — windowRules anchor CarPlay + overlay"
+fi
+if [[ ! -f "$RC_USER/config.json" ]]; then
+    install -o truckdash -g truckdash -m 0644 \
+        "$REPO_ROOT/config/react-carplay-config.json" "$RC_USER/config.json"
+    log "  installed $RC_USER/config.json — 1920x1600, kiosk=false"
+fi
+
 # ---------- udev ----------
 log "installing udev rules"
 install -m 0644 "$REPO_ROOT/udev/99-truckdash.rules" /etc/udev/rules.d/99-truckdash.rules

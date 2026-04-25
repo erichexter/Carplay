@@ -153,6 +153,23 @@ sed -i \
     -e 's|electron\.systemPreferences\.askForMediaAccess("microphone");|try { electron.systemPreferences.askForMediaAccess \&\& electron.systemPreferences.askForMediaAccess("microphone"); } catch (e) {}|' \
     "$INDEX_JS"
 
+# ---------- post-build patches: labwc-friendly window identity (fix 7) ----------
+# labwc needs a stable identifier or title to anchor CarPlay to the left
+# 1920x1600 region (rule lives in config/labwc/rc.xml, deployed by
+# scripts/install.sh). Upstream's window has title "Electron" and no app_id,
+# so labwc would place it with default cascading and our positioning rules
+# would never match. Set both:
+#   - constructor `title: "TruckDash CarPlay"` (xdg toplevel title at first map)
+#   - HTML <title>TruckDash CarPlay</title> (so it doesn't flip after load)
+#   - app.setName("truckdash-carplay") (drives Wayland app_id as identifier)
+log "post-build patching window identity for labwc (fix 7)"
+sed -i \
+    -e 's/show: true,/show: true, title: "TruckDash CarPlay",/' \
+    -e 's|electron\.app\.commandLine\.appendSwitch("enable-experimental-web-platform-features");|electron.app.setName("truckdash-carplay"); electron.app.commandLine.appendSwitch("enable-experimental-web-platform-features");|' \
+    "$INDEX_JS"
+sed -i 's|<title>Electron</title>|<title>TruckDash CarPlay</title>|' \
+    "$RC_DIR/out/renderer/index.html"
+
 log "done."
 log "  react-carplay:    $RC_DIR/out/{main,preload,renderer}"
 log "  pcm-ringbuf:      $PCM_DIR/dist"
