@@ -1,0 +1,42 @@
+# Secrets / credentials — never commit these
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa
+id_ed25519
+id_ecdsa
+*.p8
+credentials.json
+service-account*.json
+secrets.toml
+.netrc
+.npmrc
+
+# Per-host or per-Pi state that shouldn't be in source
+*.local.toml
+*.override.toml
+*.local.conf
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build / cache leftovers that escaped per-dir gitignores
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.venv/
+**/node_modules/
+**/dist/
+**/dist-electron/
+**/.dev-logs/

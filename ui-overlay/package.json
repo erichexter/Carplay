@@ -1,0 +1,27 @@
+{
+  "name": "truckdash-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TruckDash OBD2 gauge overlay — transparent Electron window that sits on top of CarPlay",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "tsc -p tsconfig.node.json && electron .",
+    "build:main": "tsc -p tsconfig.node.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^32.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "smol-toml": "^1.3.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0"
+  }
+}

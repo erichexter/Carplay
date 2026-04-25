@@ -1,0 +1,29 @@
+[project]
+name = "truckdash-obd2"
+version = "0.1.0"
+description = "TruckDash OBD2 daemon — reads PIDs from an OBDLink EX and publishes on a local WebSocket"
+requires-python = ">=3.11"
+dependencies = [
+    "obd>=0.7.1",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+truckdash-obd2 = "truckdash_obd2.__main__:_cli"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["truckdash_obd2*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

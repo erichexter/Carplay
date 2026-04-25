@@ -1,0 +1,139 @@
+# OBD2 service configuration. See PRD §7.2.
+# Deployed to /opt/truckdash/config/obd2.toml by scripts/install.sh.
+
+[adapter]
+# Stable symlink created by udev/99-truckdash.rules. The OBDLink EX's VID/PID
+# still needs to be filled in there once the device arrives — until then the
+# service falls back to autodetect.
+device = "/dev/obdlink"
+# The EX enumerates as a USB CDC-ACM device, so baudrate is nominal. Keep at
+# 115200 to match what python-OBD defaults to for ELM/STN adapters.
+baudrate = 115200
+# "auto" lets the adapter negotiate the protocol. The 2001 7.3L PCM speaks
+# J1850 PWM on HS; Ford's MS-CAN only exists on newer trucks. If autodetect
+# is flaky on the vehicle, pin to "SAE J1850 PWM" (python-OBD protocol "1").
+protocol = "auto"
+
+# Connect / retry behaviour. All in seconds.
+[adapter.retry]
+adapter_missing = 5    # no /dev/obdlink — dongle unplugged
+vehicle_off = 30       # adapter present but ECU not responding (key off)
+backoff_max = 60       # cap on successive failures
+
+# ---------------------------------------------------------------------------
+# Standard OBD-II Mode 01 PIDs. These are generic and will respond on
+# essentially any OBD-II-compliant vehicle, the 2001 7.3L included. These
+# alone satisfy the "≥6 PIDs at ≥2 Hz" Phase 2 acceptance criterion.
+# ---------------------------------------------------------------------------
+
+[[pids]]
+name = "rpm"
+display = "RPM"
+mode = "01"
+pid = "0C"
+rate_hz = 5
+units = "rpm"
+
+[[pids]]
+name = "coolant_temp"
+display = "Coolant"
+mode = "01"
+pid = "05"
+rate_hz = 2
+units = "°C"
+
+[[pids]]
+name = "speed"
+display = "Speed"
+mode = "01"
+pid = "0D"
+rate_hz = 5
+# python-OBD decodes PID 0D as km/h; scale converts to mph for the dash.
+scale = 0.621371
+units = "mph"
+
+[[pids]]
+name = "intake_temp"
+display = "IAT"
+mode = "01"
+pid = "0F"
+rate_hz = 2
+units = "°C"
+
+[[pids]]
+name = "engine_load"
+display = "Load"
+mode = "01"
+pid = "04"
+rate_hz = 2
+units = "%"
+
+[[pids]]
+name = "throttle_pos"
+display = "Throttle"
+mode = "01"
+pid = "11"
+rate_hz = 5
+units = "%"
+
+[[pids]]
+name = "fuel_level"
+display = "Fuel"
+mode = "01"
+pid = "2F"
+rate_hz = 1
+units = "%"
+
+# ---------------------------------------------------------------------------
+# Ford Mode 22 enhanced PIDs for the 7.3L Power Stroke.
+#
+# TODO (before going on the truck): the exact PID numbers below are NOT
+# confirmed for the 2001 F-250 7.3L PCM. Ford shuffled these across model
+# years (99 / 00 / 01 / 02 / 03 all differ). Verify against a known-good
+# source — Forscan community, TheDieselStop PID lists, or the PCM
+# definition files in iQuote / IDS — before trusting these values on the
+# vehicle. Leave these entries commented out until verified; otherwise the
+# daemon will hammer the PCM with requests it rejects.
+#
+# Scale / offset hints below are placeholders too. Do not enable without
+# cross-checking with a scanner that's known to read these correctly. For
+# now the daemon will query these and the mock adapter supplies synthetic
+# values so the overlay can be iterated on without hardware. When wiring
+# to the real truck, verify PIDs and replace the scale/offset to convert
+# raw PCM counts to engineering units.
+# ---------------------------------------------------------------------------
+
+[[pids]]
+name = "eot"
+display = "Oil Temp"
+mode = "22"
+pid = "1310"          # TODO: verify for 2001 7.3L
+rate_hz = 1
+units = "°F"
+scale = 1.0           # TODO: derive from raw PCM counts
+
+[[pids]]
+name = "tot"
+display = "Trans Temp"
+mode = "22"
+pid = "1E1C"          # TODO: verify — 4R100 TFT, year-specific
+rate_hz = 1
+units = "°F"
+scale = 1.0           # TODO: derive from raw PCM counts
+
+[[pids]]
+name = "icp"
+display = "ICP"
+mode = "22"
+pid = "1434"          # TODO: verify for 2001 7.3L
+rate_hz = 5
+units = "psi"
+scale = 1.0           # TODO: derive from raw PCM counts
+
+#[[pids]]
+#name = "ipr"
+#display = "IPR"
+#mode = "22"
+#pid = "1341"          # TODO: verify
+#rate_hz = 2
+#units = "%"

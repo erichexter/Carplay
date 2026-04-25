@@ -1,0 +1,30 @@
+# TruckDash global configuration. See PRD.md §7.1.
+# This file is deployed to /opt/truckdash/config/truckdash.toml by install.sh.
+
+[system]
+hostname = "truckdash"
+log_dir = "/var/log/truckdash"
+
+[carplay]
+# Carlinkit CPC200-CCPA USB IDs. Verify with `lsusb` on the Pi — the udev rule
+# in udev/99-truckdash.rules must match. Values here are used by the CarPlay
+# service to select the right USB device when multiple are present.
+carlinkit_vendor_id = "1314"
+carlinkit_product_id = "1520"
+# ALSA device name for audio out. Discover with `aplay -L`. USB DAC typical.
+audio_device = "hw:USB_DAC,0"
+target_fps = 60
+
+[camera]
+reverse_gpio_pin = 17
+video_device = "/dev/video0"
+grace_period_seconds = 1
+resolution = "1280x720"
+framerate = 30
+
+[compositor]
+backend = "labwc"
+
+[supervisor]
+status_port = 9000
+health_check_interval_seconds = 10

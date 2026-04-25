@@ -1,0 +1,10 @@
+[Unit]
+Description=TruckDash infotainment target
+Documentation=file:/opt/truckdash/PRD.md
+# Wait for multi-user userspace and graphical boot before starting anything.
+Requires=multi-user.target
+After=multi-user.target graphical.target
+AllowIsolate=no
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+[Unit]
+Description=TruckDash OBD2 daemon (python-OBD + WebSocket publisher)
+Documentation=file:/opt/truckdash/obd2/README.md
+PartOf=truckdash.target
+After=truckdash.target
+
+[Service]
+Type=simple
+User=truckdash
+Group=truckdash
+# dialout: access to /dev/obdlink (via udev rule)
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/truckdash/obd2
+
+# The install step creates a venv at /opt/truckdash/obd2/.venv and
+# installs the package into it. See obd2/README.md.
+Environment=PATH=/opt/truckdash/obd2/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/truckdash/obd2/.venv/bin/truckdash-obd2 \
+    --config /opt/truckdash/config/obd2.toml \
+    --log-dir /var/log/truckdash/obd2
+
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=truckdash.target

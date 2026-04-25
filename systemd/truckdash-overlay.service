@@ -1,0 +1,45 @@
+[Unit]
+Description=TruckDash OBD2 gauge overlay (Electron + React)
+Documentation=file:/opt/truckdash/ui-overlay/README.md
+# NOTE: this unit is a Phase 2 affordance. Per PRD §4.2 the overlay is
+# logically part of ranchdash-compositor, which will own layer ordering in
+# Phase 5. Until that lands we run the overlay as a standalone Electron
+# window stacked on top of CarPlay via alwaysOnTop + transparent.
+PartOf=truckdash.target
+After=truckdash.target truckdash-carplay.service truckdash-obd2.service
+
+[Service]
+Type=simple
+User=truckdash
+Group=truckdash
+SupplementaryGroups=video render input
+WorkingDirectory=/opt/truckdash/ui-overlay
+
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=WAYLAND_DISPLAY=wayland-0
+# Electron 22+ defaults Ozone to X11 — hint it explicitly for labwc.
+Environment=ELECTRON_OZONE_PLATFORM_HINT=wayland
+Environment=ELECTRON_DISABLE_SANDBOX=1
+# Overlay reads gauges.toml and connects to the obd2 WebSocket at these paths;
+# override here if you're moving things around.
+Environment=TRUCKDASH_GAUGES_CONFIG=/opt/truckdash/config/gauges.toml
+Environment=TRUCKDASH_OBD2_WS=ws://127.0.0.1:8765
+
+# labwc honors alwaysOnTop within an app but not across apps — whichever
+# fullscreen client maps its surface last ends up on top. systemd `After=`
+# only orders start; it does not wait for the first frame. Sleep long
+# enough that truckdash-carplay has mapped its window before we do.
+ExecStartPre=/bin/sleep 8
+
+ExecStart=/opt/truckdash/ui-overlay/launch.sh
+
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=truckdash.target

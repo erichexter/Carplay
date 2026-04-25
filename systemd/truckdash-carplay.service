@@ -1,0 +1,40 @@
+[Unit]
+Description=TruckDash CarPlay (Electron + react-carplay)
+Documentation=file:/opt/truckdash/carplay/README.md
+PartOf=truckdash.target
+After=truckdash.target systemd-user-sessions.service
+
+[Service]
+Type=simple
+User=truckdash
+Group=truckdash
+SupplementaryGroups=plugdev video render input
+WorkingDirectory=/opt/truckdash/carplay
+
+# Wayland/X env for kiosk rendering. Adjust if using a different compositor
+# (the truckdash-compositor service in later phases will own this).
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=WAYLAND_DISPLAY=wayland-0
+# Electron 22+ defaults Ozone to X11 even on Wayland sessions — hint it
+# explicitly or we get "Missing X server or $DISPLAY" on labwc.
+Environment=ELECTRON_OZONE_PLATFORM_HINT=wayland
+# Electron under a non-root user on Bookworm needs this for sandbox to work
+# without setuid chrome-sandbox. The launch script handles fallback.
+Environment=ELECTRON_DISABLE_SANDBOX=1
+
+ExecStart=/opt/truckdash/carplay/launch.sh
+Restart=on-failure
+RestartSec=5
+
+# Stop flapping: if we crash 3 times in a minute, systemd will give up and
+# the supervisor (PRD §6.6) takes over escalation. True exponential backoff
+# requires systemd >= 254; Bookworm ships 252, so we approximate.
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Clean shutdown window.
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=truckdash.target

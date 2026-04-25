@@ -1,0 +1,14 @@
+# Shell scripts MUST be LF — they run on the Pi (Linux). Windows Git clients
+# default to CRLF via core.autocrlf, which breaks the `#!/usr/bin/env bash`
+# shebang with `\r not found`.
+*.sh             text eol=lf
+*.bash           text eol=lf
+
+# systemd unit files and udev rules are parsed by Linux tooling.
+*.service        text eol=lf
+*.target         text eol=lf
+*.rules          text eol=lf
+
+# Configs and docs — keep canonical LF to match what ships on the Pi.
+*.toml           text eol=lf
+*.md             text eol=lf

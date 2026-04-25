@@ -1,0 +1,71 @@
+# Gauges overlay configuration. See PRD §7.3.
+# Deployed to /opt/truckdash/config/gauges.toml by scripts/install.sh.
+#
+# Each [[gauges]] entry references a pid.name defined in obd2.toml.
+
+[overlay]
+# Where on the screen the gauge panel lives.
+# Valid: top-left, top-right, bottom-left, bottom-right.
+position = "top-right"
+
+# Opacity of the gauge background chrome. Per PRD §10 this is capped at 0.9
+# so the overlay can never fully obscure the driver's forward view (safety).
+opacity = 0.85
+background = "rgba(0, 0, 0, 0.5)"
+
+# Pixel inset from the screen edge the overlay is anchored to.
+margin_px = 16
+
+# Update cadence for the renderer. The service publishes samples at each PID's
+# rate; the overlay coalesces and repaints at this rate to avoid flicker.
+render_hz = 10
+
+# ---------------------------------------------------------------------------
+# Overlay layout. Order below is display order (top to bottom).
+#
+# EOT / Trans Temp / ICP reference Ford Mode 22 PIDs whose numbers are still
+# TODO — the daemon's mock adapter animates them for dev, but real-truck
+# values require verifying the PIDs in obd2.toml against a known-good source.
+# ---------------------------------------------------------------------------
+
+[[gauges]]
+pid = "speed"
+type = "numeric"
+size = "large"
+warn_above = 70     # mph
+alert_above = 75
+
+[[gauges]]
+pid = "rpm"
+type = "numeric"
+size = "medium"
+warn_above = 3000   # 7.3L redlines near 3300
+alert_above = 3200
+
+[[gauges]]
+pid = "eot"
+type = "numeric"
+size = "medium"
+warn_above = 220    # °F
+alert_above = 228
+
+[[gauges]]
+pid = "tot"
+type = "numeric"
+size = "medium"
+warn_above = 190    # °F — 4R100 is happy below here
+alert_above = 200
+
+[[gauges]]
+pid = "icp"
+type = "numeric"
+size = "medium"
+warn_below = 500    # psi — idle ICP ~500-600; losing pressure = stall risk
+alert_below = 400
+
+[[gauges]]
+pid = "fuel_level"
+type = "numeric"
+size = "small"
+warn_below = 25     # %
+alert_below = 10
