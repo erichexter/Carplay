@@ -5,6 +5,8 @@ Stroke. Targets a Pi 5 8GB — the Pi 4B was tested in Phase 1 bring-up and
 ruled out (see [`docs/phase1-notes.md`](docs/phase1-notes.md) for why).
 See [`PRD.md`](PRD.md) for scope, architecture, and phased plan.
 
+![TruckDash dashboard: CarPlay on the left, OBD2 gauge overlay with green/yellow/red bands on the right](docs/img/dashboard.png)
+
 ## Status
 
 | Phase | Description                        | State       |
