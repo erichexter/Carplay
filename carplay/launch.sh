@@ -110,7 +110,13 @@ ELECTRON_FLAGS=(
     --use-angle=gles
     --ignore-gpu-blocklist
     --enable-gpu-rasterization
-    --enable-zero-copy
+    # NOTE: --enable-zero-copy is OK for fullscreen surfaces (kiosk:true)
+    # because they can hit the display controller's scanout path with
+    # SCANOUT-eligible buffers. With kiosk:false the surface is windowed
+    # and the compositor has to composite — zero-copy buffers can't be
+    # scanned out OR sampled, so the GPU process exits in a 1Hz crash
+    # loop. Leaving zero-copy off; the small cost on fullscreen mode is
+    # worth keeping kiosk-toggling viable.
 )
 
 # For the dev-mode electron binary, point it at the app directory. For a
