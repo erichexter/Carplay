@@ -57,6 +57,8 @@ function createWindow(): void {
       y: 0,
       width: PANEL_W,
       height: scrH,
+      title: "TruckDash overlay",
+      show: false,
       frame: false,
       transparent: true,
       backgroundColor: "#00000000",
@@ -100,6 +102,20 @@ function createWindow(): void {
     // above us — clicking the CarPlay UI hides the overlay. Combined with
     // the moveTop() poll below, this keeps the gauges visible.
     mainWindow.setAlwaysOnTop(true, "screen-saver");
+
+    // Wayland (xdg-shell) doesn't let clients position their own
+    // surfaces — the constructor x/y are X11-era hints labwc may ignore
+    // (we've been seeing the window land centered). setBounds() after
+    // map sometimes wins where the constructor doesn't, because it's a
+    // configure_request from the client; labwc honors it more often.
+    // If this still doesn't anchor reliably, the durable fix is a
+    // labwc windowRule keyed on title="TruckDash overlay".
+    const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize;
+    mainWindow.once("ready-to-show", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.setBounds({ x: scrW - PANEL_W, y: 0, width: PANEL_W, height: scrH });
+      mainWindow.show();
+    });
 
     // Backstop: even at level=screen-saver, labwc occasionally restacks on
     // focus events. A 1Hz moveTop() costs nothing and pulls us back to the
