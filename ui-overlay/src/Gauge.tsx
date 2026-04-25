@@ -80,7 +80,8 @@ function bandGradient(config: GaugeConfig): string | null {
     const c = colorAt((a + b) / 2);
     stops.push(`${c} ${a}%`, `${c} ${b}%`);
   }
-  return `linear-gradient(to right, ${stops.join(", ")})`;
+  // Vertical bar: 0% at bottom (= range_min), 100% at top (= range_max).
+  return `linear-gradient(to top, ${stops.join(", ")})`;
 }
 
 function valuePct(config: GaugeConfig, value: number | null): number | null {
@@ -100,36 +101,19 @@ export function Gauge({ config, sample }: Props) {
   return (
     <div
       style={{
+        display: "flex",
+        alignItems: "stretch",
         padding: "4px 14px",
         color: LEVEL_COLOR[level],
         fontVariantNumeric: "tabular-nums",
-        textAlign: "right",
       }}
     >
-      <div
-        style={{
-          fontSize: 26,
-          lineHeight: 1,
-          color: "#f5b50d",
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: 1.5,
-        }}
-      >
-        {sample?.display ?? config.pid}
-      </div>
-      <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1 }}>
-        {value != null ? value.toFixed(0) : "--"}
-      </div>
-      <div style={{ fontSize: 20, lineHeight: 1, color: "#aaa" }}>
-        {sample?.unit ?? ""}
-      </div>
       {gradient && (
         <div
           style={{
             position: "relative",
-            marginTop: 4,
-            height: 10,
+            width: 14,
+            marginRight: 14,
             borderRadius: 2,
             background: gradient,
             opacity: 0.85,
@@ -139,11 +123,11 @@ export function Gauge({ config, sample }: Props) {
             <div
               style={{
                 position: "absolute",
-                left: `${markerPct}%`,
-                top: -3,
-                bottom: -3,
-                width: 4,
-                marginLeft: -2,
+                bottom: `${markerPct}%`,
+                left: -3,
+                right: -3,
+                height: 4,
+                marginBottom: -2,
                 background: "#ffffff",
                 boxShadow: "0 0 4px rgba(0,0,0,0.9)",
                 borderRadius: 1,
@@ -152,6 +136,26 @@ export function Gauge({ config, sample }: Props) {
           )}
         </div>
       )}
+      <div style={{ flex: 1, textAlign: "right" }}>
+        <div
+          style={{
+            fontSize: 26,
+            lineHeight: 1,
+            color: "#f5b50d",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: 1.5,
+          }}
+        >
+          {sample?.display ?? config.pid}
+        </div>
+        <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1 }}>
+          {value != null ? value.toFixed(0) : "--"}
+        </div>
+        <div style={{ fontSize: 20, lineHeight: 1, color: "#aaa" }}>
+          {sample?.unit ?? ""}
+        </div>
+      </div>
     </div>
   );
 }
