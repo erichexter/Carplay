@@ -100,7 +100,7 @@ export function Gauge({ config, sample }: Props) {
   return (
     <div
       style={{
-        padding: "4px 14px",
+        padding: "18px 14px",
         color: LEVEL_COLOR[level],
         fontVariantNumeric: "tabular-nums",
         textAlign: "right",
