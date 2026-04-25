@@ -1,9 +1,9 @@
 import type { GaugeConfig, Sample } from "./types";
 
 const SIZE_PX: Record<GaugeConfig["size"], number> = {
-  small: 52,
-  medium: 72,
-  large: 104,
+  small: 80,
+  medium: 112,
+  large: 160,
 };
 
 interface Props {
@@ -45,11 +45,11 @@ export function Gauge({ config, sample }: Props) {
     >
       <div
         style={{
-          fontSize: 14,
-          color: "#000",
+          fontSize: 22,
+          color: "#f5b50d",
           fontWeight: 700,
           textTransform: "uppercase",
-          letterSpacing: 0.5,
+          letterSpacing: 1,
         }}
       >
         {sample?.display ?? config.pid}
@@ -57,7 +57,7 @@ export function Gauge({ config, sample }: Props) {
       <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1 }}>
         {value != null ? value.toFixed(0) : "--"}
       </div>
-      <div style={{ fontSize: 13, color: "#000", opacity: 0.7 }}>{sample?.unit ?? ""}</div>
+      <div style={{ fontSize: 18, color: "#aaa" }}>{sample?.unit ?? ""}</div>
     </div>
   );
 }
