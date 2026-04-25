@@ -134,6 +134,25 @@ log "installing react-carplay deps (a few minutes on a Pi)"
 log "building react-carplay via electron-vite (skips the typecheck gate, fix 4)"
 (cd "$RC_DIR" && npx electron-vite build)
 
+# ---------- post-build patches against out/main/index.js (fix 5 + 6) ----------
+# 5. Upstream calls electron.systemPreferences.askForMediaAccess("microphone")
+#    unconditionally. That API exists only on macOS — on Linux it's undefined
+#    and throws TypeError. The throw is inside createWindow so the whole rest
+#    of init bails as an unhandled promise rejection.
+# 6. The BrowserWindow is created with show:false and waits for ready-to-show.
+#    With kiosk:true the fullscreen path force-shows the window anyway, so
+#    upstream never noticed. With kiosk:false (windowed mode for the gauge
+#    overlay), ready-to-show fires unreliably under labwc + V3D and the
+#    window stays hidden indefinitely. Forcing show:true at construction
+#    flashes nothing visible (renderer paints before mapping completes) and
+#    guarantees the window appears.
+INDEX_JS="$RC_DIR/out/main/index.js"
+log "post-build patching $INDEX_JS (fixes 5 and 6)"
+sed -i \
+    -e 's/show: false,/show: true,/' \
+    -e 's|electron\.systemPreferences\.askForMediaAccess("microphone");|try { electron.systemPreferences.askForMediaAccess \&\& electron.systemPreferences.askForMediaAccess("microphone"); } catch (e) {}|' \
+    "$INDEX_JS"
+
 log "done."
 log "  react-carplay:    $RC_DIR/out/{main,preload,renderer}"
 log "  pcm-ringbuf:      $PCM_DIR/dist"
