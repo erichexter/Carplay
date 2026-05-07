@@ -70,6 +70,32 @@ class OBDAdapter(Adapter):
         self._conn = await asyncio.to_thread(_connect)
         if not self._conn.is_connected():
             log.warning("adapter opened but ECU not responding (vehicle off?)")
+            return
+
+        # 2001 7.3L PCMs answer Mode 22 only with the Ford SCP diagnostic
+        # header set: priority C4, target=PCM functional 10, source=tester F1.
+        # Without this, every `22 PPQQ` request returns NO DATA. Discovered
+        # 2026-05-07 — see memory/mode22_clone_blocker.md and
+        # config/obd2.toml. We pin the protocol to J1850 PWM (`ATSP1`)
+        # because adapter auto-detect is sometimes flaky on first connect.
+        await asyncio.to_thread(self._send_at, "ATSP1")
+        await asyncio.to_thread(self._send_at, "ATSH C410F1")
+
+    def _send_at(self, command: str) -> None:
+        """Send a raw AT command via python-OBD's underlying interface."""
+        if self._conn is None:
+            return
+        # python-OBD exposes the ELM327 wrapper as `.interface`; older
+        # versions used `.connection`. Cover both.
+        iface = getattr(self._conn, "interface", None) or getattr(self._conn, "connection", None)
+        if iface is None or not hasattr(iface, "send_and_parse"):
+            log.warning("cannot send %s: no AT interface on python-OBD connection", command)
+            return
+        try:
+            iface.send_and_parse(command)
+            log.debug("sent %s", command)
+        except Exception as e:
+            log.warning("send %s failed: %s", command, e)
 
     async def query(self, pid: PidConfig) -> Sample | None:
         if not self.is_ready():
@@ -114,11 +140,10 @@ class OBDAdapter(Adapter):
                 pass
 
         # Fallback: build a raw command. Mode 22 and any Mode 01 PIDs that
-        # python-OBD doesn't ship a decoder for go here.
-        # TODO: write a proper decoder once a real 7.3L Mode 22 response is
-        # captured and we know the byte layout. For now we return the
-        # concatenated data bytes as an integer; scale/offset in obd2.toml
-        # then convert to engineering units.
+        # python-OBD doesn't ship a decoder for go here. For Mode 22, the
+        # 7.3L PCM sometimes returns more payload bytes than carry data
+        # (e.g. EOT @ 1310 returns 3 bytes but only byte 0 is meaningful).
+        # `byte_count` in obd2.toml lets us slice off the trailing junk.
         def _raw_decoder(messages):
             if not messages:
                 return None
@@ -127,6 +152,8 @@ class OBDAdapter(Adapter):
             # Mode 22 echoes 3. Use the pid string length as a cheap proxy.
             skip = 1 + (len(pid.pid) // 2)
             payload = data[skip:]
+            if pid.byte_count is not None:
+                payload = payload[: pid.byte_count]
             if not payload:
                 return None
             return int.from_bytes(payload, "big")

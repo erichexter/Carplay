@@ -87,53 +87,84 @@ units = "%"
 # ---------------------------------------------------------------------------
 # Ford Mode 22 enhanced PIDs for the 7.3L Power Stroke.
 #
-# TODO (before going on the truck): the exact PID numbers below are NOT
-# confirmed for the 2001 F-250 7.3L PCM. Ford shuffled these across model
-# years (99 / 00 / 01 / 02 / 03 all differ). Verify against a known-good
-# source — Forscan community, TheDieselStop PID lists, or the PCM
-# definition files in iQuote / IDS — before trusting these values on the
-# vehicle. Leave these entries commented out until verified; otherwise the
-# daemon will hammer the PCM with requests it rejects.
+# Verified against a 2001 F-250 7.3L PCM on 2026-05-07 via
+# obd2/tools/probe_mode22.py + a paired FORScan CSV capture. The PCM
+# requires the Ford SCP header `ATSH C410F1` (priority C4, target=PCM
+# functional 10, source=tester F1) before a `22 PPQQ` request will get
+# anything other than NO DATA. The daemon must send that header on the
+# adapter for these entries to work — see truckdash_obd2/adapter.py.
 #
-# Scale / offset hints below are placeholders too. Do not enable without
-# cross-checking with a scanner that's known to read these correctly. For
-# now the daemon will query these and the mock adapter supplies synthetic
-# values so the overlay can be iterated on without hardware. When wiring
-# to the real truck, verify PIDs and replace the scale/offset to convert
-# raw PCM counts to engineering units.
+# Probe report: obd2/probe-2.txt
+# Cross-reference data: C:/Users/eric/Documents/FORScan/new.csv
+# Memory: memory/mode22_clone_blocker.md
 # ---------------------------------------------------------------------------
 
 [[pids]]
 name = "eot"
 display = "Oil Temp"
 mode = "22"
-pid = "1310"          # TODO: verify for 2001 7.3L
+pid = "1310"
 rate_hz = 1
 units = "°F"
-scale = 1.0           # TODO: derive from raw PCM counts
+# Confirmed: response payload is 3 bytes, only byte 0 is data; bytes 1-2
+# appear to be unrelated padding. byte 0 is engine oil temperature in °C
+# (raw 0x24 read at idle = 36 °C, matched FORScan exactly). Convert °C → °F.
+byte_count = 1
+scale = 1.8
+offset = 32.0
 
 [[pids]]
 name = "tot"
 display = "Trans Temp"
 mode = "22"
-pid = "1E1C"          # TODO: verify — 4R100 TFT, year-specific
+pid = "1128"
 rate_hz = 1
 units = "°F"
-scale = 1.0           # TODO: derive from raw PCM counts
+# Confirmed 2026-05-07 KOEO: response payload is 3 bytes BE; the value
+# lives in byte 2 with leading zeros (e.g. `00 00 17` = 23). Big-endian
+# uint over the full 3 bytes gives the same answer for all realistic
+# trans temps (≤255 °C, easily). Direct °C; convert to °F.
+# Note: this address was originally guessed as "ICP_alt" in the probe
+# candidate list — the data was right there in probe-2.txt and we
+# re-decoded it correctly on the second pass. See obd2/PIDS.md.
+byte_count = 3
+scale = 1.8
+offset = 32.0
 
 [[pids]]
 name = "icp"
 display = "ICP"
 mode = "22"
-pid = "1434"          # TODO: verify for 2001 7.3L
+pid = "1434"
 rate_hz = 5
 units = "psi"
-scale = 1.0           # TODO: derive from raw PCM counts
+# Confirmed: 2-byte big-endian payload in kPa (0x0F06 = 3846 kPa at idle,
+# matched FORScan ICP 3734 kPa within sample variation). Convert kPa → psi.
+byte_count = 2
+scale = 0.1450377
+offset = 0.0
 
+# Probable, not yet confirmed at non-idle states. Decoded from the
+# 2026-05-07 probe but only one engine state was captured. Re-verify
+# at warm idle + a throttle blip before relying on these.
 #[[pids]]
 #name = "ipr"
 #display = "IPR"
 #mode = "22"
-#pid = "1341"          # TODO: verify
+#pid = "1105"
 #rate_hz = 2
 #units = "%"
+#byte_count = 1
+#scale = 0.392
+#offset = 0.0
+#
+#[[pids]]
+#name = "map"
+#display = "MAP"
+#mode = "22"
+#pid = "1102"
+#rate_hz = 2
+#units = "kPa"
+#byte_count = 2
+#scale = 1.0
+#offset = 0.0

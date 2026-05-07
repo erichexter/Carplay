@@ -43,33 +43,38 @@ import serial  # pyserial
 # -----------------------------------------------------------------------------
 
 CANDIDATES: list[tuple[str, str, str]] = [
-    # Engine Oil Temp
-    ("1310", "EOT",  "Engine Oil Temp — most commonly cited for 7.3L"),
-    ("115C", "EOT",  "alt EOT address seen on some 7.3L lists"),
-    ("1137", "EOT",  "alt EOT address"),
+    # The full table of what's been probed and what's known lives at
+    # obd2/PIDS.md. This list is intentionally small and TFT-focused —
+    # the candidates below are what's left to try after the 2026-05-07
+    # passes. Confirmed-not-implemented addresses (returned 7F 22 ... 12)
+    # have been pruned to save PCM cycles.
 
-    # Transmission Fluid Temp (4R100)
-    ("1E1C", "TFT",  "4R100 trans fluid temp — year-variant"),
-    ("111D", "TFT",  "alt TFT address"),
-    ("1120", "TFT",  "alt TFT address"),
+    # Sanity check — known-working PID. If this returns NO DATA the
+    # adapter / header is broken and any negatives below are meaningless.
+    ("1310", "EOT",  "sanity check — confirmed working from 2026-05-07 probe"),
 
-    # Injection Control Pressure
-    ("1434", "ICP",  "ICP sensor raw (kPa or counts, TBD)"),
-    ("1110", "ICP",  "ICP filtered"),
-    ("1128", "ICP",  "ICP demand / commanded"),
+    # 4R100 TFT — community-cited candidates we haven't tried yet.
+    ("1228", "TFT",  "TFT candidate from Ford PCM strategy lists"),
+    ("1302", "TFT",  "TFT candidate — 4R100-specific"),
+    ("1F1F", "TFT",  "TFT alt"),
+    ("10A4", "TFT",  "TFT raw counts candidate"),
+    ("125C", "TFT",  "TFT paired-temperature candidate"),
+    ("110D", "TFT",  "TFT adjacent-to-working 11xx range"),
+    ("1107", "TFT",  "TFT adjacent-to-working 11xx range"),
 
-    # Injection Pressure Regulator duty cycle
-    ("1341", "IPR",  "IPR duty %"),
-    ("1105", "IPR",  "alt IPR address"),
+    # Adjacent-to-working 00xx range — speculative for TFT or any other
+    # temperature signal we may stumble onto.
+    ("0014", "TFT",  "00xx range probe — adjacent to working 0015/0016/0017"),
+    ("0018", "TFT",  "00xx range probe"),
+    ("0019", "TFT",  "00xx range probe"),
+    ("001A", "TFT",  "00xx range probe"),
 
-    # Boost / MAP / Baro (not requested for the dash but useful to probe
-    # while we have the bus open — rules out or in as future gauges)
-    ("1102", "MAP",  "Manifold Absolute Pressure"),
-    ("1103", "BARO", "Barometric pressure"),
-    ("115F", "MGP",  "Manifold Gauge Pressure (boost)"),
-
-    # Fuel Pulse Width
-    ("114F", "FPW",  "Injector fuel pulse width"),
+    # Adjacent-to-working EOT (1310). 4R100 trans temp could be just
+    # next door, since Ford often groups related signals.
+    ("1306", "TFT",  "TFT adjacent-to-EOT (1310) probe"),
+    ("1308", "TFT",  "TFT adjacent-to-EOT probe"),
+    ("1311", "TFT",  "TFT adjacent-to-EOT probe"),
+    ("1312", "TFT",  "TFT adjacent-to-EOT probe"),
 ]
 
 
@@ -134,6 +139,11 @@ def init_adapter(elm: Elm, protocol: str, report: list[str]) -> None:
     log("ATH1",   elm.cmd("ATH1"))  # headers on — we want to see the ECU address
     log("ATSP",   elm.cmd(f"ATSP {protocol}"))
     log("ATST FF", elm.cmd("ATST FF"))  # ~1 s per-message timeout
+    # Ford SCP PCM header for J1850 PWM. Discovered in the
+    # ford-odbii-scanner repo (src/obd_connection.py): without this header,
+    # raw `22 PPQQ` requests get NO DATA on a 2001 7.3L PCM. C4=priority,
+    # 10=PCM functional address, F1=tester address.
+    log("ATSH C410F1", elm.cmd("ATSH C410F1"))
     log("ATI",    elm.cmd("ATI"))
     log("ATDP",   elm.cmd("ATDP"))
 
@@ -177,6 +187,7 @@ class ProbeResult:
     label: str
     note: str
     samples: list[list[int]]
+    timestamps: list[str]  # wall-clock ISO timestamp per accepted sample
     errors: list[str]
 
     def summary(self) -> str:
@@ -189,12 +200,24 @@ class ProbeResult:
         mean = statistics.fmean(as_int) if as_int else 0
         span = (min(as_int), max(as_int)) if as_int else (0, 0)
         first_hex = " ".join(f"{b:02X}" for b in self.samples[0])
+        first_ts = self.timestamps[0] if self.timestamps else "?"
+        last_ts = self.timestamps[-1] if self.timestamps else "?"
         return (
             f"  {self.pid}  {self.label:5s}  "
             f"{byte_count}B  n={len(self.samples)}  "
             f"ex=[{first_hex}]  uint_mean={mean:.1f}  range=[{span[0]}..{span[1]}]  "
+            f"t={first_ts}..{last_ts}  "
             f"— {self.note}"
         )
+
+    def detail_lines(self) -> list[str]:
+        """Per-sample lines for cross-referencing against a FORScan CSV."""
+        out: list[str] = []
+        for ts, s in zip(self.timestamps, self.samples):
+            hex_str = " ".join(f"{b:02X}" for b in s)
+            uint_val = int.from_bytes(bytes(s), "big")
+            out.append(f"    {ts}  {self.pid}  {self.label:5s}  [{hex_str}]  uint={uint_val}")
+        return out
 
 
 def probe_one(elm: Elm, pid: str, samples: int, delay_s: float) -> ProbeResult:
@@ -207,8 +230,10 @@ def probe_one(elm: Elm, pid: str, samples: int, delay_s: float) -> ProbeResult:
             break
 
     results: list[list[int]] = []
+    timestamps: list[str] = []
     errors: list[str] = []
     for _ in range(samples):
+        ts = datetime.now().isoformat(timespec="milliseconds")
         reply = elm.cmd(f"22 {pid[0:2]} {pid[2:4]}", read_timeout_s=1.5)
         joined = " | ".join(reply.lines)
         if NO_DATA_RES.search(joined):
@@ -219,9 +244,13 @@ def probe_one(elm: Elm, pid: str, samples: int, delay_s: float) -> ProbeResult:
             errors.append(f"unparsed: {joined}")
             continue
         results.append(data)
+        timestamps.append(ts)
         time.sleep(delay_s)
 
-    return ProbeResult(pid=pid, label=label, note=note, samples=results, errors=errors)
+    return ProbeResult(
+        pid=pid, label=label, note=note,
+        samples=results, timestamps=timestamps, errors=errors,
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -273,11 +302,20 @@ def main() -> int:
                 seen.add(p)
                 unique_pids.append(p)
 
+        results: list[ProbeResult] = []
         for pid in unique_pids:
             result = probe_one(elm, pid, args.samples, args.delay)
             line = result.summary()
             report.append(line)
             print(line, flush=True)
+            results.append(result)
+
+        report.append("")
+        report.append("Per-sample detail (cross-reference these timestamps against your FORScan CSV):")
+        report.append("")
+        for r in results:
+            if r.samples:
+                report.extend(r.detail_lines())
     finally:
         elm.close()
 

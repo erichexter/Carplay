@@ -1,0 +1,38 @@
+TruckDash Mode 22 probe
+  when:   2026-05-07T15:00:00
+  port:   COM3 @ 115200
+  proto:  ELM 1
+
+Adapter init:
+  ATZ: ELM327 v1.4b
+  ATE0: OK
+  ATL0: OK
+  ATS0: OK
+  ATH1: OK
+  ATSP: OK
+  ATST FF: OK
+  ATSH C410F1: OK
+  ATI: ELM327 v1.4b
+  ATDP: SAE J1850 PWM
+
+Probing 16 candidates (2 samples each, 0.25s delay):
+
+  1310  EOT    unparsed: 64F110621310254EB5
+  1228  TFT    unparsed: 64F1107F221228001276
+  1302  TFT    unparsed: 64F1107F2213020012D4
+  1F1F  TFT    unparsed: 64F1107F221F1F00129B
+  10A4  TFT    unparsed: 64F1107F2210A400129B
+  125C  TFT    unparsed: 64F1107F22125C001238
+  110D  TFT    unparsed: 64F1107F22110D001275
+  1107  TFT    unparsed: 64F1106211070021
+  0014  TFT    unparsed: 64F11062001400008D
+  0018  TFT    unparsed: 64F110620018000087
+  0019  TFT    unparsed: 64F110620019000008
+  001A  TFT    unparsed: 64F11062001A000084
+  1306  TFT    unparsed: 64F1107F2213060012D2
+  1308  TFT    unparsed: 64F1107F2213080012DB
+  1311  TFT    unparsed: 64F1107F221311001240
+  1312  TFT    unparsed: 64F1107F2213120012CC
+
+Per-sample detail (cross-reference these timestamps against your FORScan CSV):
+

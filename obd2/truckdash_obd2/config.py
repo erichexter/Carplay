@@ -30,6 +30,11 @@ class PidConfig:
     units: str = ""
     scale: float = 1.0
     offset: float = 0.0
+    # Number of payload bytes to use for the integer value, big-endian. None
+    # means use the full payload. Needed for Mode 22 PIDs where the response
+    # carries trailing bytes that aren't part of the value (e.g. EOT @ 1310
+    # returns 3 bytes but only byte 0 is the °C reading).
+    byte_count: int | None = None
     warn_above: float | None = None
     warn_below: float | None = None
 
@@ -42,7 +47,8 @@ class Config:
 
 _PID_KEYS = {
     "name", "display", "mode", "pid", "rate_hz",
-    "units", "scale", "offset", "warn_above", "warn_below",
+    "units", "scale", "offset", "byte_count",
+    "warn_above", "warn_below",
 }
 
 
