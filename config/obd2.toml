@@ -9,10 +9,10 @@ device = "/dev/obdlink"
 # The EX enumerates as a USB CDC-ACM device, so baudrate is nominal. Keep at
 # 115200 to match what python-OBD defaults to for ELM/STN adapters.
 baudrate = 115200
-# "auto" lets the adapter negotiate the protocol. The 2001 7.3L PCM speaks
-# J1850 PWM on HS; Ford's MS-CAN only exists on newer trucks. If autodetect
-# is flaky on the vehicle, pin to "SAE J1850 PWM" (python-OBD protocol "1").
-protocol = "auto"
+# Pinned to "1" = SAE J1850 PWM. The 2001 7.3L PCM speaks PWM on HS, and
+# python-OBD's autodetect tries CAN first and fails ("unable to connect"),
+# so we skip negotiation. Confirmed needed on the truck 2026-05-07.
+protocol = "1"
 
 # Connect / retry behaviour. All in seconds.
 [adapter.retry]
@@ -27,12 +27,21 @@ backoff_max = 60       # cap on successive failures
 # ---------------------------------------------------------------------------
 
 [[pids]]
+# Ford Mode 22 PID 1100 = engine RPM. The 7.3L PCM does not implement
+# generic Mode 01 PID 0C (returns 7F 010C 11 — request out of range), so
+# the standard OBD-II "0C" path that python-OBD assumes is unusable. PID
+# 1100 returns 4 data bytes + checksum; bytes 1–2 are u16 BE in 0.25 RPM
+# units. With our byte_count=3 the high-byte-zero acts as a no-op and
+# bytes 0–2 BE × 0.25 still equals RPM. Idle reading verified on the
+# truck 2026-05-07: raw 0x0009FF = 2559 → 639.75 RPM (textbook 7.3L idle).
 name = "rpm"
 display = "RPM"
-mode = "01"
-pid = "0C"
+mode = "22"
+pid = "1100"
 rate_hz = 5
 units = "rpm"
+byte_count = 3
+scale = 0.25
 
 [[pids]]
 name = "coolant_temp"

@@ -12,14 +12,11 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="1314", ATTRS{idProduct}=="1520", \
     MODE="0660", GROUP="plugdev", TAG+="uaccess", SYMLINK+="carlinkit"
 
 # --- OBDLink EX USB (PRD §6.2) ---
-# Ford-specific variant with native MS-CAN support. The EX uses a different
-# USB chipset from the SX, so the VID/PID below is a placeholder. Before
-# Phase 2 work starts, plug the EX in and run:
-#     lsusb
-# then replace XXXX:XXXX below with the reported idVendor:idProduct. The EX
-# typically enumerates as a USB CDC-ACM device — if so, keep SUBSYSTEM="tty".
-#SUBSYSTEM=="tty", ATTRS{idVendor}=="XXXX", ATTRS{idProduct}=="XXXX", \
-#    MODE="0660", GROUP="dialout", SYMLINK+="obdlink"
+# Ford-specific variant with native MS-CAN support. The EX enumerates as an
+# FTDI FT231X (0403:6015) and shows up as /dev/ttyUSBn — confirmed on this
+# truck's hardware 2026-05-07.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", \
+    MODE="0660", GROUP="dialout", SYMLINK+="obdlink"
 
 # --- u-blox GPS (PRD §6.3) ---
 # u-blox 7/8 USB dongles typically appear as 1546:01a7 or 1546:01a8.

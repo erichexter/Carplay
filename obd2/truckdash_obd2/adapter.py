@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -36,17 +37,29 @@ class Adapter(ABC):
     def close(self) -> None: ...
 
 
+_NEG_RE = re.compile(r"\b(NO DATA|CAN ERROR|BUS ERROR|UNABLE TO CONNECT|STOPPED|\?)\b", re.I)
+_NON_HEX = re.compile(r"[^0-9A-Fa-f]")
+
+
 class OBDAdapter(Adapter):
-    """Real adapter backed by python-OBD. Imports lazily so tests can run
-    without the `obd` package installed."""
+    """Direct-serial ELM327 adapter for Ford SCP PCMs.
+
+    python-OBD's ``obd.OBD`` is unusable on a 2001 7.3L PCM: its connection
+    flow sends ``0100`` to verify the protocol, but this PCM rejects every
+    request without a Ford SCP header (``ATSH C410F1``) — and python-OBD
+    offers no hook to inject AT commands before the verification probe.
+    Instead we drive the ELM directly via pyserial, the same way
+    ``tools/probe_mode22.py`` does (which is the only path proven to work
+    on this truck — see ``memory/mode22_clone_blocker.md``).
+    """
 
     def __init__(self, cfg: AdapterConfig):
         self.cfg = cfg
-        self._conn = None  # type: ignore[assignment]
-        self._commands: dict[str, object] = {}
+        self._ser = None  # type: ignore[assignment]
+        self._initialized = False
 
     def is_ready(self) -> bool:
-        return self._conn is not None and self._conn.is_connected()
+        return self._ser is not None and self._initialized
 
     async def ensure_connected(self) -> None:
         if self.is_ready():
@@ -56,62 +69,93 @@ class OBDAdapter(Adapter):
             log.info("adapter device %s absent", device)
             return
 
-        import obd
-
-        def _connect():
-            return obd.OBD(
-                portstr=device,
-                baudrate=self.cfg.baudrate,
-                fast=False,
-                timeout=1.0,
-            )
-
         log.info("connecting to adapter at %s", device)
-        self._conn = await asyncio.to_thread(_connect)
-        if not self._conn.is_connected():
-            log.warning("adapter opened but ECU not responding (vehicle off?)")
-            return
-
-        # 2001 7.3L PCMs answer Mode 22 only with the Ford SCP diagnostic
-        # header set: priority C4, target=PCM functional 10, source=tester F1.
-        # Without this, every `22 PPQQ` request returns NO DATA. Discovered
-        # 2026-05-07 — see memory/mode22_clone_blocker.md and
-        # config/obd2.toml. We pin the protocol to J1850 PWM (`ATSP1`)
-        # because adapter auto-detect is sometimes flaky on first connect.
-        await asyncio.to_thread(self._send_at, "ATSP1")
-        await asyncio.to_thread(self._send_at, "ATSH C410F1")
-
-    def _send_at(self, command: str) -> None:
-        """Send a raw AT command via python-OBD's underlying interface."""
-        if self._conn is None:
-            return
-        # python-OBD exposes the ELM327 wrapper as `.interface`; older
-        # versions used `.connection`. Cover both.
-        iface = getattr(self._conn, "interface", None) or getattr(self._conn, "connection", None)
-        if iface is None or not hasattr(iface, "send_and_parse"):
-            log.warning("cannot send %s: no AT interface on python-OBD connection", command)
-            return
         try:
-            iface.send_and_parse(command)
-            log.debug("sent %s", command)
-        except Exception as e:
-            log.warning("send %s failed: %s", command, e)
+            self._ser = await asyncio.to_thread(self._open_serial, device)
+            await asyncio.to_thread(self._init_elm)
+        except Exception:
+            log.exception("adapter init failed")
+            self.close()
+            return
+        self._initialized = True
+
+    def _open_serial(self, device: str):
+        import serial
+        return serial.Serial(device, baudrate=self.cfg.baudrate, timeout=0.2)
+
+    def _init_elm(self) -> None:
+        # Match probe_mode22.py's init sequence — known to elicit responses
+        # from the 7.3L PCM and known to match FORScan's reported values
+        # when the response is parsed by the byte_count layout in obd2.toml.
+        # ATH1 (headers on) is required: with ATH0 the ELM auto-strips one
+        # trailing byte after each response, which removes the actual data
+        # for some PIDs (e.g. TOT @ 1128 carries its value in the last byte
+        # of a "00 00 XX" payload — verified against FORScan 2026-05-07).
+        # _decode below tolerates the leading J1850 PWM header bytes by
+        # locating the ``62<pid>`` substring inside the full response.
+        protocol = self.cfg.protocol if self.cfg.protocol not in ("", "auto") else "1"
+        for cmd, timeout in (
+            ("ATZ", 3.0),
+            ("ATE0", 1.0),
+            ("ATL0", 1.0),
+            ("ATS0", 1.0),
+            ("ATH1", 1.0),
+            (f"ATSP{protocol}", 1.0),
+            ("ATST FF", 1.0),
+            # Ford SCP PCM functional address. Without this the 2001 7.3L PCM
+            # returns NO DATA for every request. Confirmed 2026-05-07.
+            ("ATSH C410F1", 1.0),
+        ):
+            r = self._chat(cmd, read_timeout=timeout)
+            log.info("init %s -> %s", cmd, r or "<empty>")
+
+    def _chat(self, command: str, read_timeout: float = 1.0) -> str:
+        """Send one command, read until the ELM '>' prompt, return cleaned text."""
+        if self._ser is None:
+            return ""
+        self._ser.reset_input_buffer()
+        self._ser.write((command + "\r").encode("ascii"))
+        self._ser.flush()
+
+        deadline = time.monotonic() + read_timeout
+        buf = bytearray()
+        while time.monotonic() < deadline:
+            chunk = self._ser.read(256)
+            if chunk:
+                buf.extend(chunk)
+                if b">" in buf:
+                    break
+            else:
+                time.sleep(0.01)
+
+        text = buf.decode("ascii", errors="replace").replace("\r", "\n")
+        lines = [ln.strip() for ln in text.split("\n")]
+        lines = [ln for ln in lines if ln and ln != ">" and ln != command]
+        return " | ".join(lines)
 
     async def query(self, pid: PidConfig) -> Sample | None:
         if not self.is_ready():
             return None
-        cmd = self._command_for(pid)
+        request = f"{pid.mode}{pid.pid}"
 
         def _run():
-            return self._conn.query(cmd, force=True)
+            return self._chat(request, read_timeout=1.5)
 
-        resp = await asyncio.to_thread(_run)
-        if resp is None or resp.is_null():
+        try:
+            raw = await asyncio.to_thread(_run)
+        except Exception:
+            log.exception("query %s failed", pid.name)
+            self._initialized = False  # force re-init on next cycle
             return None
-        raw = resp.value
-        if raw is None:
+
+        log.debug("query %s (%s) -> %r", pid.name, request, raw)
+
+        if not raw or _NEG_RE.search(raw):
             return None
-        value = float(raw.magnitude) if hasattr(raw, "magnitude") else float(raw)
+
+        value = self._decode(pid, raw)
+        if value is None:
+            return None
         value = value * pid.scale + pid.offset
         return Sample(
             pid_name=pid.name,
@@ -121,62 +165,57 @@ class OBDAdapter(Adapter):
             ts=time.time(),
         )
 
-    def _command_for(self, pid: PidConfig):
-        import obd
+    @staticmethod
+    def _decode(pid: PidConfig, raw: str) -> float | None:
+        """Pull the data bytes out of an ELM response.
 
-        if pid.name in self._commands:
-            return self._commands[pid.name]
+        With ATS0 (spaces off) and ATH0 (headers off) the PCM payload arrives
+        as one contiguous hex string, e.g. ``62131024EA`` for ``221310``.
+        We strip every non-hex character (handles `|` line breaks, the few
+        cases where the ELM does emit spaces, etc.) and look for the
+        canonical positive-response prefix:
 
-        # Prefer python-OBD's built-in Mode 01 commands so we get their decoders
-        # and units for free.
+        - Mode 01: ``4<mode_low><pid>``
+        - Mode 22: ``62<pid_hi><pid_lo>``
+
+        Negative responses (``7F<mode>...``) and noise without the prefix
+        return None — the daemon treats that as "no sample this cycle".
+        """
+        flat = _NON_HEX.sub("", raw).upper()
+        if not flat:
+            return None
+
         if pid.mode == "01":
-            try:
-                pid_int = int(pid.pid, 16)
-                cmd = obd.commands[1][pid_int]
-                if cmd is not None:
-                    self._commands[pid.name] = cmd
-                    return cmd
-            except (IndexError, KeyError, ValueError):
-                pass
+            mode_low = int(pid.mode, 16) | 0x40
+            prefix = f"{mode_low:02X}{pid.pid.upper()}"
+        elif pid.mode == "22":
+            prefix = f"62{pid.pid.upper()}"
+        else:
+            mode_low = int(pid.mode, 16) | 0x40
+            prefix = f"{mode_low:02X}{pid.pid.upper()}"
 
-        # Fallback: build a raw command. Mode 22 and any Mode 01 PIDs that
-        # python-OBD doesn't ship a decoder for go here. For Mode 22, the
-        # 7.3L PCM sometimes returns more payload bytes than carry data
-        # (e.g. EOT @ 1310 returns 3 bytes but only byte 0 is meaningful).
-        # `byte_count` in obd2.toml lets us slice off the trailing junk.
-        def _raw_decoder(messages):
-            if not messages:
-                return None
-            data = messages[0].data
-            # Strip the mode+pid echo. Mode 01 response echoes 2 bytes;
-            # Mode 22 echoes 3. Use the pid string length as a cheap proxy.
-            skip = 1 + (len(pid.pid) // 2)
-            payload = data[skip:]
-            if pid.byte_count is not None:
-                payload = payload[: pid.byte_count]
-            if not payload:
-                return None
-            return int.from_bytes(payload, "big")
-
-        raw_cmd = f"{pid.mode}{pid.pid}".encode("ascii")
-        cmd = obd.OBDCommand(
-            name=pid.name,
-            desc=pid.display,
-            command=raw_cmd,
-            bytes=0,
-            decoder=_raw_decoder,
-            ecu=obd.ECU.ENGINE,
-            fast=False,
-        )
-        self._commands[pid.name] = cmd
-        return cmd
+        idx = flat.find(prefix)
+        if idx == -1:
+            return None
+        payload = flat[idx + len(prefix):]
+        # Take bytes in pairs of hex characters.
+        n_bytes = len(payload) // 2
+        if n_bytes == 0:
+            return None
+        bytes_out = bytes.fromhex(payload[: n_bytes * 2])
+        if pid.byte_count is not None:
+            bytes_out = bytes_out[: pid.byte_count]
+        if not bytes_out:
+            return None
+        return float(int.from_bytes(bytes_out, "big"))
 
     def close(self) -> None:
-        if self._conn is not None:
+        self._initialized = False
+        if self._ser is not None:
             try:
-                self._conn.close()
+                self._ser.close()
             finally:
-                self._conn = None
+                self._ser = None
 
 
 class MockAdapter(Adapter):
